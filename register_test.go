@@ -62,6 +62,24 @@ func TestBasics(t *testing.T) {
 		tlsClientConfig.RootCAs = certpool
 	}
 
+	// This third server will use an abstract unix domain socket.
+	var (
+		socket3 = filepath.Join("@", tempdir, "3")
+	)
+	{
+		ln, err := net.Listen("unix", socket3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ln.Close()
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, 3, r.URL.Path) })
+		server := httptest.NewUnstartedServer(handler)
+		server.Listener = ln
+		server.Start()
+		defer server.Close()
+	}
+
 	// We could just use a plain http.Client, but for the TLS config required by
 	// the second server. Create the transport with the TLS config, and a client
 	// that utilizes that transport.
@@ -88,6 +106,18 @@ func TestBasics(t *testing.T) {
 		var (
 			rawurl = "https+unix://" + socket2 + ":/bar#fragment"
 			want   = "2 /bar"
+			have   = get(t, client, rawurl)
+		)
+		if want != have {
+			t.Errorf("%s: want %q, have %q", rawurl, want, have)
+		}
+	}
+
+	// http+unix with an abstract socket should also work.
+	{
+		var (
+			rawurl = "http+unix://" + socket3 + ":/bar#fragment"
+			want   = "3 /bar"
 			have   = get(t, client, rawurl)
 		)
 		if want != have {

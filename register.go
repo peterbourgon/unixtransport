@@ -14,7 +14,7 @@ import (
 // requests to Unix domain sockets via the "http+unix" or "https+unix" schemes.
 // Request URLs should have the following form:
 //
-//    https+unix:///path/to/socket:/request/path?query=val&...
+//	https+unix:///path/to/socket:/request/path?query=val&...
 //
 // The registered transport is based on a clone of the provided transport, and
 // so uses the same configuration: timeouts, TLS settings, and so on. Connection
@@ -85,6 +85,13 @@ func roundTripAdapter(next http.RoundTripper) http.RoundTripper {
 		parts := strings.SplitN(req.URL.Path, ":", 2)
 		if len(parts) != 2 {
 			return nil, errors.New("unix transport: invalid path")
+		}
+
+		// abstract sockets are prefixed with an @ character
+		// but this information is lost when the URL is parsed
+		// so we need to re-add it here
+		if req.URL.String()[len(req.URL.Scheme)+3] == '@' {
+			parts[0] = "@" + parts[0]
 		}
 
 		var (
