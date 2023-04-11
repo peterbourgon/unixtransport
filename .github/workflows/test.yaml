@@ -1,37 +1,43 @@
-on: push
-name: tests
+name: Test
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
 jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.x]
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-    - name: Install Go
-      uses: actions/setup-go@v1
-      with:
-        go-version: ${{ matrix.go-version }}
-    - name: Install staticcheck
-      run: pwd && cd .. && go get -v -u honnef.co/go/tools/cmd/staticcheck && cd -
-      shell: bash
-    - name: Install golint
-      run: pwd && cd .. && go get -v -u golang.org/x/lint/golint && cd -
-      shell: bash
-    - name: Update PATH
-      run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-      shell: bash
-    - name: Checkout code
-      uses: actions/checkout@v1
-    - name: Fmt
-      if: matrix.platform != 'windows-latest' # :(
-      run: "F=$(gofmt -l .) ; if [[ $F ]] ; then echo $F ; exit 1 ; fi"
-      shell: bash
-    - name: Vet
-      run: go vet ./...
-    - name: Staticcheck
-      run: staticcheck ./...
-    - name: Lint
-      run: golint ./...
-    - name: Test
-      run: go test -race ./...
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.x
+
+      - name: Check out repo
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # default is a pseudo 'merge' commit
+
+      - name: Install tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install mvdan.cc/gofumpt@latest
+
+      - name: gofmt
+        run: diff <(gofmt -d . 2>/dev/null) <(printf '')
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        run: staticcheck ./...
+
+      - name: gofumpt
+        run: diff <(gofumpt -d -e -l . 2>/dev/null) <(printf '')
+
+      - name: go test
+        run: go test -v ./...
