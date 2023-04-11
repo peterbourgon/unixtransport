@@ -14,7 +14,7 @@ import (
 // requests to Unix domain sockets via the "http+unix" or "https+unix" schemes.
 // Request URLs should have the following form:
 //
-//    https+unix:///path/to/socket:/request/path?query=val&...
+//	https+unix:///path/to/socket:/request/path?query=val&...
 //
 // The registered transport is based on a clone of the provided transport, and
 // so uses the same configuration: timeouts, TLS settings, and so on. Connection
