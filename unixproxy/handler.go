@@ -14,32 +14,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 )
 
 // Handler is a reverse proxy to Unix sockets on the local filesystem.
 //
-// Requests are mapped to target Unix sockets based on their Host header. Each
-// sub-domain element underneath the configured Host TLD is parsed as a filepath
-// element relative to Root directory. If that resolved filepath is a valid Unix
-// socket, the request is proxied to that socket, via an [http.Client] that
-// utilizes [github.com/peterbourgon/unixtransport].
+// Requests are mapped to sockets based on their Host header. Each sub-domain
+// element underneath the configured Host domain is parsed as a filepath element
+// relative to Root directory. If the resulting filepath identifies a valid Unix
+// socket, the request is proxied to that socket.
 //
-// For example, a Handler configured with Host "unixproxy.localhost" and Root
-// "/tmp/abc" would map a request with Host "foo.bar.unixproxy.localhost" to a
-// Unix socket at "/tmp/abc/foo/bar", if it exists.
+// As an example, a Handler configured with Host "unixproxy.localhost" and Root
+// "/tmp/abc" would map a request with Host header "foo.bar.unixproxy.localhost"
+// to a socket at "/tmp/abc/foo/bar".
 type Handler struct {
-	// Host is the top-level domain (TLD) of the Handler, which is expected to
-	// end in ".localhost" as per RFC2606. The system should be configured to
-	// resolve requests to this domain (and all subdomains) to localhost,
-	// typically via an entry in "/etc/hosts".
+	// Host is the base/apex domain of the Handler, which should end in
+	// ".localhost" per RFC2606. The system should be configured to resolve that
+	// domain (and all subdomains) to localhost, typically via an entry in
+	// "/etc/hosts".
 	//
 	// Optional. The default value is "unixproxy.localhost".
 	Host string
 
 	// Root is a valid directory on the local filesystem. The handler will look
-	// in this directory tree, recursively, for valid Unix sockets, when
-	// proxying a given request.
+	// in this directory tree, recursively, for destination Unix sockets, when
+	// proxying an incoming request.
 	//
 	// Required.
 	Root string
@@ -49,37 +49,34 @@ type Handler struct {
 	//
 	// Optional. By default, each [http.ReverseProxy] has a nil ErrorLog.
 	ErrorLogWriter io.Writer
+
+	once sync.Once
 }
 
-// Domains returns a slice of strings that represent valid Host headers for
-// incoming requests. It computes this slice by walking the directory tree from
-// the Root directory via [filepath.WalkDir], and converting the relative file
-// path of any valid Unix socket to a FQDN underneath the Host TLD. Results are
-// not cached.
-func (h *Handler) Domains() ([]string, error) {
-	var domains []string
-	if err := filepath.WalkDir(h.Root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+const defaultHost = "unixproxy.localhost"
 
-		if d.Type()&os.ModeSocket == 0 {
-			return nil
+func (h *Handler) validate() error {
+	h.once.Do(func() {
+		if h.Host == "" {
+			h.Host = defaultHost
 		}
+	})
 
-		relpath, err := filepath.Rel(h.Root, path)
-		if err != nil {
-			return err
-		}
-
-		subdomain := strings.Replace(relpath, string(filepath.Separator), ".", -1)
-		domain := strings.Trim(subdomain, ".") + "." + strings.Trim(h.Host, ".")
-		domains = append(domains, domain)
-		return nil
-	}); err != nil {
-		return nil, err
+	if !strings.HasSuffix(h.Host, ".localhost") {
+		return fmt.Errorf("invalid Host (%s): must end in .localhost", h.Host)
 	}
-	return domains, nil
+
+	if h.Root == "" {
+		return fmt.Errorf("invalid Root: not specified")
+	}
+
+	if fi, err := os.Stat(h.Root); err != nil {
+		return fmt.Errorf("invalid Root: %w", err)
+	} else if !fi.IsDir() {
+		return fmt.Errorf("invalid Root: %s: not a directory", h.Root)
+	}
+
+	return nil
 }
 
 // ServeHTTP implements http.Handler. If the request Host header is equal to the
@@ -87,6 +84,11 @@ func (h *Handler) Domains() ([]string, error) {
 // subdomains. Otherwise, the request will be proxied to a local Unix domain
 // socket based on its subdomain.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := h.validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	switch {
 	case r.URL.Path == "/favicon.ico":
 		http.NotFound(w, r)
@@ -98,7 +100,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
-	domains, err := h.Domains()
+	domains, err := h.domains()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -127,6 +129,32 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, s)
 		}
 	}
+}
+
+func (h *Handler) domains() ([]string, error) {
+	var domains []string
+	if err := filepath.WalkDir(h.Root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.Type()&os.ModeSocket == 0 {
+			return nil
+		}
+
+		relpath, err := filepath.Rel(h.Root, path)
+		if err != nil {
+			return err
+		}
+
+		subdomain := strings.Replace(relpath, string(filepath.Separator), ".", -1)
+		domain := strings.Trim(subdomain, ".") + "." + strings.Trim(h.Host, ".")
+		domains = append(domains, domain)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return domains, nil
 }
 
 func (h *Handler) handleProxy(w http.ResponseWriter, r *http.Request) {
