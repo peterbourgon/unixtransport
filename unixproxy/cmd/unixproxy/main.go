@@ -41,9 +41,9 @@ func main() {
 func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) error {
 	fs := flag.NewFlagSet("unixproxy", flag.ContinueOnError)
 	var (
-		proxyAddr   = fs.String("proxy-addr", ":80", "HTTP listen endpoint for reverse proxy server")
-		hostHeader  = fs.String("host-header", "unixproxy.localhost", "Host header where this service is reachable")
-		socketsPath = fs.String("sockets-path", ".", "root path to look for Unix sockets")
+		addrFlag = fs.String("addr", ":80", "HTTP listen endpoint for reverse proxy server")
+		hostFlag = fs.String("host", "unixproxy.localhost", "Host header where this service is reachable")
+		rootFlag = fs.String("root", ".", "root path to look for Unix sockets")
 	)
 	if err := ff.Parse(fs, args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
@@ -51,20 +51,20 @@ func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []
 
 	logger := log.New(stderr, "", 0)
 
-	proxyListener, err := unixproxy.ListenURI(ctx, *proxyAddr)
+	proxyListener, err := unixproxy.ListenURI(ctx, *addrFlag)
 	if err != nil {
 		return fmt.Errorf("listen on proxy addr: %w", err)
 	}
 
 	proxyHandler := &unixproxy.Handler{
-		Host:           *hostHeader,
-		Root:           *socketsPath,
+		Host:           *hostFlag,
+		Root:           *rootFlag,
 		ErrorLogWriter: logger.Writer(),
 	}
 
-	logger.Printf("listening on %s", proxyListener.Addr())
-	logger.Printf("serving host http://%s", *hostHeader)
-	logger.Printf("proxying to sockets in %s", *socketsPath)
+	logger.Printf("proxy listening on %s", proxyListener.Addr())
+	logger.Printf("serving host http://%s", *hostFlag)
+	logger.Printf("sockets root path %s", *rootFlag)
 
 	var g run.Group
 

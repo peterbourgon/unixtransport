@@ -28,11 +28,13 @@ import (
 // As an example, a Handler configured with Host "unixproxy.localhost" and Root
 // "/tmp/abc" would map a request with Host header "foo.bar.unixproxy.localhost"
 // to a socket at "/tmp/abc/foo/bar".
+//
+// Parameters are evaluated during ServeHTTP.
 type Handler struct {
-	// Host is the base/apex domain of the Handler, which should end in
-	// ".localhost" per RFC2606. The system should be configured to resolve that
-	// domain (and all subdomains) to localhost, typically via an entry in
-	// "/etc/hosts".
+	// Host is the base/apex domain which the Handler expects to receive as part
+	// of all request Host headers. It should end in ".localhost" per RFC2606,
+	// and the system should be configured to resolve that domain (and all
+	// subdomains) to localhost, typically via an entry in "/etc/hosts".
 	//
 	// Optional. The default value is "unixproxy.localhost".
 	Host string

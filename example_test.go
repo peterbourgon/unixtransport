@@ -23,11 +23,12 @@ func ExampleRegister_custom() {
 		// ...
 	}
 
+	unixtransport.Register(t)
+
 	c := &http.Client{
 		Transport: t,
+		// ...
 	}
-
-	unixtransport.Register(t)
 
 	c.Get("https+unix:///tmp/my.sock")
 }
