@@ -3,11 +3,20 @@
 // The intent of this package is to facilitate local development of distributed
 // systems, by allowing normal HTTP clients that assume TCP (cURL, browsers,
 // etc.) to address localhost servers via semantically-meaningful subdomains
-// rather than opaque port numbers. The intermediating reverse-proxy works
-// dynamically, without any explicit configuration.
+// rather than opaque port numbers.
 //
-// [Handler] provides the reverse-proxy logic. See documentation on that type
-// for usage information.
+// For example, rather than addressing your application server as localhost:8081
+// and your Prometheus instance as localhost:9090, you could use
+//
+//	http://{myapp,prometheus}.unixproxy.localhost
+//
+// Or, you could have 3 clusters of 3 instances each, addressed as
+//
+//	http://{nyc,lax,fra}.{1,2,3}.unixproxy.localhost
+//
+// The intermediating reverse-proxy, provided by [Handler], works dynamically,
+// without any explicit configuration. See documentation on that type for usage
+// information.
 //
 // Application servers need to be able to listen on Unix sockets. The [ParseURI]
 // and [ListenURI] helpers exist for this purpose. They accept both typical
