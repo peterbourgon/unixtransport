@@ -41,9 +41,10 @@ func main() {
 func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) error {
 	fs := flag.NewFlagSet("unixproxy", flag.ContinueOnError)
 	var (
-		addrFlag = fs.String("addr", ":80", "HTTP listen endpoint for reverse proxy server")
+		addrFlag = fs.String("addr", ":80", "listen endpoint for HTTP reverse proxy server")
 		hostFlag = fs.String("host", "unixproxy.localhost", "Host header where this service is reachable")
 		rootFlag = fs.String("root", ".", "root path to look for Unix sockets")
+		dnsFlag  = fs.String("dns", "", "listen endpoint for localhost DNS resolver (optional)")
 	)
 	if err := ff.Parse(fs, args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
@@ -62,18 +63,28 @@ func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []
 		ErrorLogWriter: logger.Writer(),
 	}
 
-	logger.Printf("proxy listening on %s", proxyListener.Addr())
 	logger.Printf("serving host http://%s", *hostFlag)
-	logger.Printf("sockets root path %s", *rootFlag)
+	logger.Printf("sockets root %s", *rootFlag)
 
 	var g run.Group
 
 	{
+		logger.Printf("proxy listening on %s", proxyListener.Addr())
 		server := &http.Server{Handler: proxyHandler}
 		g.Add(func() error {
 			return server.Serve(proxyListener)
 		}, func(error) {
 			server.Close()
+		})
+	}
+
+	if *dnsFlag != "" {
+		logger.Printf("DNS resolver listening on %s", *dnsFlag)
+		server := unixproxy.NewDNSServer(*dnsFlag, logger)
+		g.Add(func() error {
+			return server.ListenAndServe()
+		}, func(error) {
+			server.ShutdownContext(ctx)
 		})
 	}
 
