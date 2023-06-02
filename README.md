@@ -1,4 +1,4 @@
-# unixtransport [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/unixtransport.svg)](https://pkg.go.dev/github.com/peterbourgon/unixtransport) ![tests](https://github.com/peterbourgon/unixtransport/actions/workflows/test.yaml/badge.svg?branch=main)
+# unixtransport [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/unixtransport.svg)](https://pkg.go.dev/github.com/peterbourgon/unixtransport) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/unixtransport?style=flat-square) ![Tests](https://github.com/peterbourgon/unixtransport/actions/workflows/test.yaml/badge.svg?branch=main)
 
 This package adds support for Unix domain sockets in Go HTTP clients.
 
