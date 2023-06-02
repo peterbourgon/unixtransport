@@ -31,20 +31,25 @@ import (
 //
 // Parameters are evaluated during ServeHTTP.
 type Handler struct {
-	// Host is the base/apex domain which the Handler expects to receive as part
-	// of all request Host headers. It should end in ".localhost" per RFC2606,
-	// and the system should be configured to resolve that domain (and all
-	// subdomains) to localhost, typically via an entry in "/etc/hosts".
-	//
-	// Optional. The default value is "unixproxy.localhost".
-	Host string
-
 	// Root is a valid directory on the local filesystem. The handler will look
 	// in this directory tree, recursively, for destination Unix sockets, when
-	// proxying an incoming request.
+	// proxying an incoming request. See [Handler] for more detail.
 	//
 	// Required.
 	Root string
+
+	// Host is the base/apex domain which the Handler expects to receive as part
+	// of all request Host headers. It should end in .localhost per RFC2606, and
+	// the system should resolve that domain, and all subdomains, to a localhost
+	// IP. Typically, this is done by adding an entry to /etc/hosts as follows.
+	//
+	//  127.0.0.1   localhost # note: separator must be a literal tab
+	//
+	// Modern macOS systems will ignore /etc/hosts in many contexts, see
+	// [NewDNSServer] for a workaround.
+	//
+	// Optional. The default value is "unixproxy.localhost".
+	Host string
 
 	// ErrorLogWriter is used as the destination writer for the ErrorLog of the
 	// [http.ReverseProxy] used to proxy individual requests.
@@ -63,10 +68,6 @@ func (h *Handler) validate() error {
 			h.Host = defaultHost
 		}
 	})
-
-	if !strings.HasSuffix(h.Host, ".localhost") {
-		return fmt.Errorf("invalid Host (%s): must end in .localhost", h.Host)
-	}
 
 	if h.Root == "" {
 		return fmt.Errorf("invalid Root: not specified")

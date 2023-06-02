@@ -1,11 +1,10 @@
 # package unixproxy
 
-> :warning: EXPERIMENTAL AND POTENTIALLY INSECURE
+Note: this package is experimental and potentially insecure.
 
-This package provides a reverse proxy to local Unix sockets. The intent is to
-facilitate local development of distributed systems, by creating
-semantically-meaningful addresses for an arbitrary number of HTTP servers on
-localhost.
+Package unixproxy provides a reverse proxy to local Unix sockets. The intent is
+to facilitate local development of distributed systems, by creating semantically
+meaningful addresses for arbitrary localhost HTTP servers.
 
 See [package documentation][docs] for details.
 
