@@ -68,6 +68,7 @@ func getResponse(request *dns.Msg, logger *log.Logger) *dns.Msg {
 	var answer []dns.RR
 	for _, q := range response.Question {
 		var (
+			typ = dns.TypeToString[q.Qtype]
 			rr  dns.RR
 			err error
 		)
@@ -79,10 +80,10 @@ func getResponse(request *dns.Msg, logger *log.Logger) *dns.Msg {
 		case dns.TypeHTTPS:
 			rr, err = dns.NewRR(fmt.Sprintf("%s HTTPS 1 127.0.0.1", q.Name))
 		default:
-			err = fmt.Errorf("unsupported question type %T", q.Qtype)
+			err = fmt.Errorf("unsupported question type %s", typ)
 		}
 		if err != nil {
-			logger.Printf("%s %s: %v", dns.TypeToString[q.Qtype], q.Name, err)
+			logger.Printf("%s %s: %v", typ, q.Name, err)
 			return &response
 		}
 		answer = append(answer, rr)
