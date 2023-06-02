@@ -8,7 +8,8 @@
 // For example, rather than addressing your application server as localhost:8081
 // and your Prometheus instance as localhost:9090, you could use
 //
-//	http://{myapp,prometheus}.unixproxy.localhost
+//	http://myapp.unixproxy.localhost
+//	http://prometheus.unixproxy.localhost
 //
 // Or, you could have 3 clusters of 3 instances each, addressed as
 //

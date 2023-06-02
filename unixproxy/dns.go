@@ -13,15 +13,17 @@ import (
 // all A and HTTPS queries to the IPv4 address 127.0.0.1, and all AAAA queries
 // to the IPv6 address ::1. It ignores all other request types.
 //
-// This is designed for use on macOS systems, where many applications (including
-// e.g. Safari) perform DNS lookups through resolvers that ignore /etc/hosts. As
-// a workaround, users can run this (limited) DNS resolver on a specific local
-// port, and tell the system to use it when resolving hosts matching the
-// relevant host string.
+// A nil logger parameter is valid and will result in no log output.
 //
-// As an example, assuming the default host of unixproxy.localhost, and that
-// this resolver runs on 127.0.0.1:5354, create /etc/resolver/localhost with the
-// following content.
+// This is intended for use on macOS systems, where many applications (including
+// Safari and cURL) perform DNS lookups through a system resolver that ignores
+// /etc/hosts. As a workaround, users can run this (limited) DNS resolver on a
+// specific local port, and configure the system resolver to use it when
+// resolving hosts matching the relevant host string.
+//
+// Assuming the default host of unixproxy.localhost, and assuming this resolver
+// runs on 127.0.0.1:5354, create /etc/resolver/localhost with the following
+// content.
 //
 //	nameserver 127.0.0.1
 //	port 5354
