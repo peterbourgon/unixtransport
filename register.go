@@ -20,12 +20,13 @@ import (
 // so uses the same configuration: timeouts, TLS settings, and so on. Connection
 // pooling should also work as normal. One caveat: only the DialContext and
 // DialTLSContext dialers are respected; the Dial and DialTLS dialers are
-// explicitly removed and ignored.
+// explicitly removed and ignored. Any configured proxy is discarded.
 func Register(t *http.Transport) {
 	copy := t.Clone()
 
 	copy.Dial = nil    //lint:ignore SA1019 yes, it's deprecated, that's the point
 	copy.DialTLS = nil //lint:ignore SA1019 yes, it's deprecated, that's the point
+	copy.Proxy = nil   // never send unix socket conns to a proxy
 
 	switch {
 	case copy.DialContext == nil && copy.DialTLSContext == nil:
