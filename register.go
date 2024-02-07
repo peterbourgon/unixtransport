@@ -20,7 +20,7 @@ import (
 // so uses the same configuration: timeouts, TLS settings, and so on. Connection
 // pooling should also work as normal. One caveat: only the DialContext and
 // DialTLSContext dialers are respected; the Dial and DialTLS dialers are
-// explicitly removed and ignored. Any configured proxy is discarded.
+// explicitly removed and ignored. Any configured Proxy is also discarded.
 func Register(t *http.Transport) {
 	copy := t.Clone()
 
