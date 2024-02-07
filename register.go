@@ -26,7 +26,7 @@ func Register(t *http.Transport) {
 
 	copy.Dial = nil    //lint:ignore SA1019 yes, it's deprecated, that's the point
 	copy.DialTLS = nil //lint:ignore SA1019 yes, it's deprecated, that's the point
-	copy.Proxy = nil   // never send unix socket conns to a proxy
+	copy.Proxy = nil   // Proxy doesn't support Unix sockets, so drop it
 
 	switch {
 	case copy.DialContext == nil && copy.DialTLSContext == nil:
