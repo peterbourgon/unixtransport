@@ -23,12 +23,18 @@ func TestParseURI(t *testing.T) {
 		{uri: "localhost:0", network: "tcp", address: "localhost:0"},
 		{uri: "localhost:", network: "tcp", address: "localhost:"},
 
-		// Verify clean parsing of typical URLs.
+		// Verify clean parsing of scheme-less URIs.
 		{uri: "example.com:443/path/part", network: "tcp", address: "example.com:443"},
 		{uri: "example.com:443?query=value", network: "tcp", address: "example.com:443"},
 		{uri: "example.com:443/path?and=query", network: "tcp", address: "example.com:443"},
 		{uri: "example.com:443/path?and=query#andfragment", network: "tcp", address: "example.com:443"},
 		{uri: "example.com:443/#justfragment", network: "tcp", address: "example.com:443"},
+
+		// Normal URL schemes like http:// are parsed as literal networks and not transformed to e.g. tcp.
+		{uri: "http://example.com:8080", network: "http", address: "example.com:8080"},
+		{uri: "https://example.com?foo=bar", network: "https", address: "example.com"},
+		{uri: "http+unix://tmp/unix/socket:/something/else", network: "http+unix", address: "tmp"},
+		{uri: "http+unix:///tmp/unix/socket:/something/else", network: "http+unix", address: "/tmp/unix/socket:/something/else"},
 
 		// Edge conditions.
 		{uri: "anything://:8080", network: "anything", address: ":8080"},
@@ -39,6 +45,7 @@ func TestParseURI(t *testing.T) {
 		{uri: "unix://tmp:8080/abc/my.sock", network: "unix", address: "tmp:8080"}, // likewise above
 		{uri: ":", network: "tcp", address: ":"},
 		{uri: "", err: true},
+		{uri: "localhost:8080/a", network: "tcp", address: "localhost:8080"},
 	} {
 		t.Run(testcase.uri, func(t *testing.T) {
 			network, address, err := unixproxy.ParseURI(testcase.uri)
@@ -49,7 +56,7 @@ func TestParseURI(t *testing.T) {
 				}
 			case !testcase.err:
 				if network != testcase.network || address != testcase.address {
-					t.Fatalf("want %q %q, have %q %q", testcase.network, testcase.address, network, address)
+					t.Fatalf("want %q %q, have %q %q (err=%v)", testcase.network, testcase.address, network, address, err)
 				}
 			}
 		})
