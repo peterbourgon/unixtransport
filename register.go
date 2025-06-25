@@ -3,7 +3,6 @@ package unixtransport
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -96,16 +95,8 @@ func roundTripAdapter(next http.RoundTripper) http.RoundTripper {
 			return nil, fmt.Errorf("unix transport: missing '+unix' suffix in scheme %s", req.URL.Scheme)
 		}
 
-		parts := strings.SplitN(req.URL.Path, ":", 2)
-		if len(parts) != 2 {
-			return nil, errors.New("unix transport: invalid path")
-		}
-
-		var (
-			socketPath  = parts[0]
-			requestPath = parts[1]
-			encodedHost = base64.RawURLEncoding.EncodeToString([]byte(socketPath))
-		)
+		socketPath, requestPath, _ := strings.Cut(req.URL.Path, ":")
+		encodedHost := base64.RawURLEncoding.EncodeToString([]byte(socketPath))
 
 		req = req.Clone(req.Context())
 		req.URL.Scheme = scheme

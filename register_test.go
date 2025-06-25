@@ -107,6 +107,18 @@ func TestRegister(t *testing.T) {
 			t.Errorf("%s: want %q, have %q", rawurl, want, have)
 		}
 	}
+
+	// Make sure an http+unix:// URI without an explicit path is OK.
+	{
+		var (
+			rawurl = "http+unix://" + socket1
+			want   = "1 /"
+			have   = get(t, client, rawurl)
+		)
+		if want != have {
+			t.Errorf("%s: want %q, have %q", rawurl, want, have)
+		}
+	}
 }
 
 func TestRegisterDefault(t *testing.T) {
