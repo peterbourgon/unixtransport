@@ -1,4 +1,4 @@
-package unixproxy
+package unixtransport
 
 import (
 	"context"
@@ -43,18 +43,40 @@ func ParseURI(uri string) (network, address string, _ error) {
 		u.Path = ""
 	}
 
+	if u.Host == "" {
+		return "", "", fmt.Errorf("empty host in URI %q", uri)
+	}
+
 	return u.Scheme, u.Host, nil
 }
 
-// ListenURI is a helper function that parses the provided URI via ParseURI, and
-// returns a [net.Listener] listening on the parsed network and address.
+// ListenURI is a helper function that calls [ListenURIConfig] with a default
+// [net.ListenConfig].
+//
+// The provided context is only used when resolving the address, it has no
+// effect on the returned listener.
+//
+// For more precise control over the listener, use [ParseURI] and construct the
+// listener directly.
 func ListenURI(ctx context.Context, uri string) (net.Listener, error) {
+	return ListenURIConfig(ctx, uri, net.ListenConfig{})
+}
+
+// ListenURIConfig is a helper function that parses the provided URI via
+// [ParseURI], and returns a [net.Listener] listening on the parsed network and
+// address, and using the provided config.
+//
+// The provided context is only used when resolving the address, it has no
+// effect on the returned listener.
+//
+// For more precise control over the listener, use [ParseURI] and construct the
+// listener directly.
+func ListenURIConfig(ctx context.Context, uri string, config net.ListenConfig) (net.Listener, error) {
 	network, address, err := ParseURI(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	config := net.ListenConfig{}
 	listener, err := config.Listen(ctx, network, address)
 	if err != nil {
 		return nil, fmt.Errorf("listen: %w", err)

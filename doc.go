@@ -1,2 +1,2 @@
-// package unixtransport allows HTTP client requests to Unix sockets.
+// package unixtransport adds Unix socket support to HTTP clients and servers.
 package unixtransport

@@ -39,9 +39,9 @@ type Handler struct {
 	Root string
 
 	// Host is the base/apex domain which the Handler expects to receive as part
-	// of all request Host headers. It should end in .localhost per RFC2606, and
-	// the system should resolve that domain, and all subdomains, to a localhost
-	// IP. Typically, this is done by adding an entry to /etc/hosts as follows.
+	// of all request Host headers. The system should resolve that domain, and
+	// all subdomains, to a localhost IP. Typically, this is done by adding an
+	// entry to /etc/hosts as follows.
 	//
 	//  127.0.0.1   localhost # note: separator must be a literal tab
 	//
@@ -64,6 +64,7 @@ const defaultHost = "unixproxy.localhost"
 
 func (h *Handler) validate() error {
 	h.once.Do(func() {
+		h.Host = normalizeHost(h.Host)
 		if h.Host == "" {
 			h.Host = defaultHost
 		}
@@ -92,10 +93,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	normalizedHost := normalizeHost(r.Host)
+
 	switch {
 	case r.URL.Path == "/favicon.ico":
 		http.NotFound(w, r)
-	case r.Host == h.Host:
+	case normalizedHost == h.Host:
 		h.handleIndex(w, r)
 	default:
 		h.handleProxy(w, r)
@@ -162,27 +165,29 @@ func (h *Handler) domains() ([]string, error) {
 
 func (h *Handler) handleProxy(w http.ResponseWriter, r *http.Request) {
 	var (
-		clean    = strings.TrimSuffix(r.Host, h.Host)
-		elements = strings.Split(clean, ".")
-		relative = filepath.Join(elements...)
-		socket   = filepath.Join(h.Root, relative)
+		normalizedHost = normalizeHost(r.Host)
+		withoutBase    = strings.TrimSuffix(normalizedHost, h.Host)
+		subdomain      = strings.TrimSuffix(withoutBase, ".")
+		labels         = strings.Split(subdomain, ".")
+		relativePath   = filepath.Join(labels...)
+		socketPath     = filepath.Join(h.Root, relativePath)
 	)
 
-	fi, err := os.Stat(socket) // TODO: sanitize, chroot, etc.
+	fi, err := os.Stat(socketPath) // TODO: chroot?
 	if err != nil || fi.Mode()&os.ModeSocket == 0 {
-		http.Error(w, fmt.Sprintf("target socket %s invalid", socket), http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("target socket %s invalid", socketPath), http.StatusNotFound)
 		return
 	}
 
 	director := func(req *http.Request) {
 		req.URL.Scheme = "http"
-		req.URL.Host = socket
+		req.URL.Host = socketPath
 		req.URL.Path = r.URL.Path
 	}
 
 	var proxyLog *log.Logger
 	if h.ErrorLogWriter != nil {
-		proxyLog = log.New(h.ErrorLogWriter, fmt.Sprintf("unixproxy: %s: ", relative), 0)
+		proxyLog = log.New(h.ErrorLogWriter, fmt.Sprintf("unixproxy: %s: ", relativePath), 0)
 	}
 
 	rp := &httputil.ReverseProxy{
@@ -192,6 +197,20 @@ func (h *Handler) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rp.ServeHTTP(w, r)
+}
+
+func normalizeHost(host string) string {
+	// Strip any :port suffix.
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+
+	// net.SplitHostPort will strip [brackets] from IPv6 addrs.
+	if ip := net.ParseIP(host); ip != nil && ip.To16() != nil && ip.To4() == nil {
+		host = "[" + strings.Trim(host, "[]") + "]"
+	}
+
+	return strings.ToLower(host)
 }
 
 var onlyUnixTransport = &http.Transport{

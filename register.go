@@ -3,7 +3,6 @@ package unixtransport
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -50,6 +49,19 @@ func Register(t *http.Transport) {
 	t.RegisterProtocol("https+unix", tt)
 }
 
+// RegisterDefault calls [Register] with the [http.DefaultTransport], which is
+// assumed to be a pointer to an [http.Transport]. Returns true if the
+// registration succeeded, and false otherwise.
+func RegisterDefault() bool {
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return false
+	}
+
+	Register(t)
+	return true
+}
+
 // dialContextAdapter decorates the provided DialContext function by trying to base64 decode
 // the provided address. If successful, the network is changed to "unix" and the address
 // is changed to the decoded value.
@@ -83,16 +95,8 @@ func roundTripAdapter(next http.RoundTripper) http.RoundTripper {
 			return nil, fmt.Errorf("unix transport: missing '+unix' suffix in scheme %s", req.URL.Scheme)
 		}
 
-		parts := strings.SplitN(req.URL.Path, ":", 2)
-		if len(parts) != 2 {
-			return nil, errors.New("unix transport: invalid path")
-		}
-
-		var (
-			socketPath  = parts[0]
-			requestPath = parts[1]
-			encodedHost = base64.RawURLEncoding.EncodeToString([]byte(socketPath))
-		)
+		socketPath, requestPath, _ := strings.Cut(req.URL.Path, ":")
+		encodedHost := base64.RawURLEncoding.EncodeToString([]byte(socketPath))
 
 		req = req.Clone(req.Context())
 		req.URL.Scheme = scheme
