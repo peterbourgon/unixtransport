@@ -15,7 +15,7 @@ import (
 	"github.com/peterbourgon/unixtransport"
 )
 
-func TestBasics(t *testing.T) {
+func TestRegister(t *testing.T) {
 	t.Parallel()
 
 	// This first server will do HTTP.
@@ -106,6 +106,46 @@ func TestBasics(t *testing.T) {
 		if want != have {
 			t.Errorf("%s: want %q, have %q", rawurl, want, have)
 		}
+	}
+}
+
+func TestRegisterDefault(t *testing.T) {
+	t.Parallel()
+
+	var (
+		tempdir = t.TempDir()
+		socket  = filepath.Join(tempdir, "1")
+	)
+	{
+		ln, err := net.Listen("unix", socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ln.Close() })
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, 1, r.URL.Path) })
+		server := httptest.NewUnstartedServer(handler)
+		server.Listener = ln
+		server.Start()
+		t.Cleanup(func() { server.Close() })
+	}
+
+	// The URI to test.
+	uri := "http+unix://" + socket + ":/foo"
+
+	// Make sure we can't GET the URI before we register the transport.
+	if _, err := http.Get(uri); err == nil {
+		t.Fatalf("GET %s: want error, got none", uri)
+	}
+
+	// Register the Unix transport in the default client.
+	if want, have := true, unixtransport.RegisterDefault(); want != have {
+		t.Fatalf("RegisterDefault: want %v, have %v", want, have)
+	}
+
+	// Now a GET request should succeed.
+	if want, have := "1 /foo", get(t, http.DefaultClient, uri); want != have {
+		t.Errorf("GET %s: want %q, have %q", uri, want, have)
 	}
 }
 

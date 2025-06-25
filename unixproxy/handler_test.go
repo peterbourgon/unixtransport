@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peterbourgon/unixtransport"
 	"github.com/peterbourgon/unixtransport/unixproxy"
 )
 
@@ -50,7 +51,7 @@ func testHandlerServer(t *testing.T, ctx context.Context) (*httptest.Server, fun
 			fmt.Fprintln(w, response)
 		}))
 
-		listener, err := unixproxy.ListenURI(ctx, "unix://"+root+"/"+x)
+		listener, err := unixtransport.ListenURI(ctx, "unix://"+root+"/"+x)
 		if err != nil {
 			t.Fatalf("%s: %v", x, err)
 		}

@@ -50,6 +50,19 @@ func Register(t *http.Transport) {
 	t.RegisterProtocol("https+unix", tt)
 }
 
+// RegisterDefault calls [Register] with the [http.DefaultTransport], which is
+// assumed to be a pointer to an [http.Transport]. Returns true if the
+// registration succeeded, and false otherwise.
+func RegisterDefault() bool {
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return false
+	}
+
+	Register(t)
+	return true
+}
+
 // dialContextAdapter decorates the provided DialContext function by trying to base64 decode
 // the provided address. If successful, the network is changed to "unix" and the address
 // is changed to the decoded value.

@@ -15,6 +15,7 @@ import (
 
 	"github.com/oklog/run"
 	"github.com/peterbourgon/ff/v3"
+	"github.com/peterbourgon/unixtransport"
 	"github.com/peterbourgon/unixtransport/unixproxy"
 )
 
@@ -43,10 +44,10 @@ func main() {
 func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) error {
 	fs := flag.NewFlagSet("unixproxy", flag.ContinueOnError)
 	var (
-		addrFlag = fs.String("addr", ":80", "listen endpoint for HTTP reverse proxy server")
+		addrFlag = fs.String("addr", ":80", "listen address for HTTP reverse proxy server")
 		hostFlag = fs.String("host", "unixproxy.localhost", "Host header where this service is reachable")
 		rootFlag = fs.String("root", ".", "root path to look for Unix sockets")
-		dnsFlag  = fs.String("dns", "", "listen endpoint for localhost DNS resolver (optional)")
+		dnsFlag  = fs.String("dns", "", "listen address for optional local DNS resolver (e.g. ':5354')")
 	)
 	fs.Usage = usageFor(fs)
 	if err := ff.Parse(fs, args); err != nil {
@@ -55,7 +56,7 @@ func exe(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []
 
 	logger := log.New(stderr, "", 0)
 
-	proxyListener, err := unixproxy.ListenURI(ctx, *addrFlag)
+	proxyListener, err := unixtransport.ListenURI(ctx, *addrFlag)
 	if err != nil {
 		return fmt.Errorf("listen on proxy addr: %w", err)
 	}
@@ -122,8 +123,16 @@ func usageFor(fs *flag.FlagSet) func() {
 		tw.Flush()
 		fmt.Fprintf(buf, "\n")
 
+		fmt.Fprintf(buf, "EXAMPLES\n")
+		fmt.Fprintf(buf, "  Make Unix sockets under /tmp/foo accessible at http://cool.pizza (macOS)\n")
+		fmt.Fprintf(buf, "\n")
+		fmt.Fprintf(buf, `    sudo printf "nameserver 127.0.0.1\nport 5354\n" > /etc/resolver/pizza`+"\n")
+		fmt.Fprintf(buf, "    sudo unixproxy --root=/tmp/foo --host=cool.pizza --addr=:80 --dns=:5354\n")
+		fmt.Fprintf(buf, "    open 'http://cool.pizza'\n")
+		fmt.Fprintf(buf, "\n")
+
 		fmt.Fprintf(buf, "DOCUMENTATION\n")
-		fmt.Fprintf(buf, "  https://github.com/peterbourgon/unixtransport/tree/main/unixproxy\n")
+		fmt.Fprintf(buf, "  https://pkg.go.dev/github.com/peterbourgon/unixtransport/unixproxy\n")
 		fmt.Fprintf(buf, "\n")
 
 		fmt.Fprint(os.Stdout, buf.String())
