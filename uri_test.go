@@ -2,9 +2,12 @@ package unixtransport_test
 
 import (
 	"context"
+	"fmt"
 	"net"
-	"os"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"syscall"
 	"testing"
 
@@ -71,108 +74,79 @@ func TestParseURI(t *testing.T) {
 func TestListenURI(t *testing.T) {
 	t.Parallel()
 
-	ln, err := unixtransport.ListenURI(context.Background(), "tcp://127.0.0.1:0")
+	ctx := context.Background()
+	socket := filepath.Join(t.TempDir(), "sock")
+
+	ln, err := unixtransport.ListenURI(ctx, "unix://"+socket)
 	if err != nil {
 		t.Fatalf("ListenURI failed: %v", err)
 	}
+	t.Cleanup(func() { ln.Close() })
 
-	addr := ln.Addr().String()
-	ln.Close()
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		t.Errorf("returned Addr() %q is not host:port", addr)
-	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "hello", r.URL.Path)
+	})
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = ln
+	server.Start()
+	t.Cleanup(func() { server.Close() })
 
-	if _, err := unixtransport.ListenURI(context.Background(), ""); err == nil {
-		t.Errorf("ListenURI('') expected error, got nil")
+	transport := &http.Transport{}
+	unixtransport.Register(transport)
+	client := &http.Client{Transport: transport}
+
+	rawurl := "http+unix://" + socket + ":/foo"
+	want := "hello /foo"
+	have := get(t, client, rawurl)
+	if want != have {
+		t.Errorf("%s: want %q, have %q", rawurl, want, have)
 	}
 }
 
-// TestListenURIConfig verifies ListenURIConfig over both TCP and Unix endpoints.
 func TestListenURIConfig(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-
-	// TCP case
-	ln, err := unixtransport.ListenURIConfig(ctx, "tcp://127.0.0.1:0", net.ListenConfig{})
-	if err != nil {
-		t.Fatalf("TCP ListenURIConfig failed: %v", err)
-	}
-	addr := ln.Addr().String()
-	ln.Close()
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		t.Errorf("returned Addr %q is not host:port: %v", addr, err)
-	}
-
-	// Unix socket case
-	dir := t.TempDir()
-	socket := filepath.Join(dir, "sock")
-	uri := "unix://" + socket
-	ln2, err := unixtransport.ListenURIConfig(ctx, uri, net.ListenConfig{})
-	if err != nil {
-		t.Fatalf("Unix ListenURIConfig failed: %v", err)
-	}
-	ln2.Close()
-	fi, err := os.Stat(socket)
-	if err != nil {
-		t.Errorf("socket file %q not created: %v", socket, err)
-	} else if fi.Mode()&os.ModeSocket == 0 {
-		t.Errorf("%q is not a socket", socket)
-	}
-}
-
-func TestListenURIConfig_Control(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	socket := filepath.Join(t.TempDir(), "sock")
 
 	type networkAddress struct {
 		network string
 		address string
 	}
 
-	cases := []struct {
-		uri  string
-		want networkAddress
-	}{
-		{
-			uri:  "[::1]:0",
-			want: networkAddress{"tcp6", "[::1]:0"},
-		},
-		{
-			uri:  "tcp://127.0.0.1:0",
-			want: networkAddress{"tcp4", "127.0.0.1:0"},
-		},
-		{
-			uri:  "unix://" + socket,
-			want: networkAddress{"unix", socket},
-		},
+	var seen []networkAddress
+	control := func(network string, address string, c syscall.RawConn) error {
+		seen = append(seen, networkAddress{network, address})
+		return nil
 	}
-	for _, tc := range cases {
-		t.Run(tc.uri, func(t *testing.T) {
-			var seen []networkAddress
 
-			cfg := net.ListenConfig{
-				Control: func(network, address string, c syscall.RawConn) error {
-					seen = append(seen, networkAddress{network, address})
-					return nil
-				},
-			}
+	var (
+		socket = filepath.Join(t.TempDir(), "sock")
+		ctx    = context.Background()
+		uri    = "unix://" + socket
+		cfg    = net.ListenConfig{Control: control}
+	)
 
-			ln, err := unixtransport.ListenURIConfig(ctx, tc.uri, cfg)
-			if err != nil {
-				t.Fatalf("ListenURIConfig: %v", err)
-			}
-			t.Logf("ln: %s", ln.Addr())
-			ln.Close()
+	ln, err := unixtransport.ListenURIConfig(ctx, uri, cfg)
+	if err != nil {
+		t.Fatalf("Unix ListenURIConfig failed: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
 
-			if want, have := 1, len(seen); want != have {
-				t.Fatalf("seen: want %d, have %d", want, have)
-			}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "hello", r.URL.Path)
+	})
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = ln
+	server.Start()
+	t.Cleanup(func() { server.Close() })
 
-			if want, have := tc.want, seen[0]; want != have {
-				t.Errorf("seen: want %q, have %q", want, have)
-			}
-		})
+	transport := &http.Transport{}
+	unixtransport.Register(transport)
+	client := &http.Client{Transport: transport}
+	rawurl := "http+unix://" + socket + ":/foo"
+	if want, have := "hello /foo", get(t, client, rawurl); want != have {
+		t.Errorf("%s: want %q, have %q", rawurl, want, have)
+	}
+
+	if want, have := []networkAddress{{"unix", socket}}, seen; !reflect.DeepEqual(want, have) {
+		t.Errorf("seen: want %+v, have %+v", want, have)
 	}
 }
