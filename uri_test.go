@@ -168,23 +168,23 @@ func TestListenURIRemoveFailures(t *testing.T) {
 
 	t.Run("bad permission", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "dir")
-		if err := os.Mkdir(dir, 0755); err != nil {
+		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatalf("os.Mkdir: %v", err)
 		}
 
 		sock := filepath.Join(dir, "sock")
-		if err := os.WriteFile(sock, []byte{}, 0644); err != nil {
+		if err := os.WriteFile(sock, []byte{}, 0o644); err != nil {
 			t.Fatalf("os.WriteFile: %v", err)
 		}
 
 		// The only way to trigger an error on the os.Remove of the socket file
 		// in a unit test like this one, is to remove the write permission on
 		// the parent directory.
-		if err := os.Chmod(dir, 0555); err != nil {
+		if err := os.Chmod(dir, 0o555); err != nil {
 			t.Fatalf("os.Chmod(%s, 0555): %v", dir, err)
 		}
 		defer func() { // allow test cleanup to remove the TempDir
-			if err := os.Chmod(dir, 0755); err != nil {
+			if err := os.Chmod(dir, 0o755); err != nil {
 				t.Errorf("os.Chmod(%s, 0755): %v", dir, err)
 			}
 		}()
@@ -197,7 +197,7 @@ func TestListenURIRemoveFailures(t *testing.T) {
 
 	t.Run("socket is directory", func(t *testing.T) {
 		d := filepath.Join(t.TempDir(), "dir-as-sock")
-		if err := os.Mkdir(d, 0755); err != nil {
+		if err := os.Mkdir(d, 0o755); err != nil {
 			t.Fatalf("os.Mkdir: %v", err)
 		}
 		uri := "unix://" + d
