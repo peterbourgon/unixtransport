@@ -5,19 +5,20 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
-// ParseURI parses the given URI to a network and address that can be passed to
-// e.g. [net.Listen].
+// ParseURI parses the given `uri` into a network and address, suitable for use
+// with functions like [net.Listen].
 //
-// The URI scheme is interpreted as the network, and the host (and port) are
-// interpreted as the address. For example, "tcp://:80" is parsed to a network
-// of "tcp" and an address of ":80", and "unix:///tmp/my.sock" is parsed to a
-// network of "unix" and an address of "/tmp/my.sock".
+// The URI scheme is interpreted as the network, and the host (including port)
+// as the address. For example, "tcp://:80" yields network "tcp" and address
+// ":80", and "unix:///tmp/my.sock" yields network "unix" and address
+// "/tmp/my.sock".
 //
 // If the URI doesn't have a scheme, "tcp://" is assumed by default, in an
-// attempt to keep basic compatibilty with common listen addresses like
+// attempt to keep basic compatibility with common listen addresses like
 // "localhost:8080" or ":9090".
 func ParseURI(uri string) (network, address string, _ error) {
 	uri = strings.TrimSpace(uri)
@@ -31,50 +32,47 @@ func ParseURI(uri string) (network, address string, _ error) {
 
 	u, err := url.Parse(uri)
 	if err != nil {
-		return "", "", err
-	}
-
-	if u.Scheme == "" {
-		u.Scheme = "tcp"
+		return "", "", fmt.Errorf("parse URI: %w", err)
 	}
 
 	if u.Host == "" && u.Path != "" {
 		u.Host = u.Path
-		u.Path = ""
 	}
 
 	if u.Host == "" {
-		return "", "", fmt.Errorf("empty host in URI %q", uri)
+		return "", "", fmt.Errorf("empty host in URI (%s)", uri)
 	}
 
 	return u.Scheme, u.Host, nil
 }
 
-// ListenURI is a helper function that calls [ListenURIConfig] with a default
-// [net.ListenConfig].
-//
-// The provided context is only used when resolving the address, it has no
-// effect on the returned listener.
-//
-// For more precise control over the listener, use [ParseURI] and construct the
-// listener directly.
+// ListenURI is a convenience function that calls [ListenURIConfig] with a
+// default [net.ListenConfig].
 func ListenURI(ctx context.Context, uri string) (net.Listener, error) {
 	return ListenURIConfig(ctx, uri, net.ListenConfig{})
 }
 
-// ListenURIConfig is a helper function that parses the provided URI via
-// [ParseURI], and returns a [net.Listener] listening on the parsed network and
-// address, and using the provided config.
+// ListenURIConfig parses `uri` into a network and address using [ParseURI],
+// then constructs a listener on that network and address, using the provided
+// [net.ListenConfig].
 //
-// The provided context is only used when resolving the address, it has no
+// If the network is "unix" or "unixpacket", it first removes any existing
+// socket file at the address, ignoring [os.IsNotExist] errors.
+//
+// The provided `ctx` is only used when resolving the listen address, it has no
 // effect on the returned listener.
 //
-// For more precise control over the listener, use [ParseURI] and construct the
-// listener directly.
+// For more precise control, use [ParseURI] and constructa listener yourself.
 func ListenURIConfig(ctx context.Context, uri string, config net.ListenConfig) (net.Listener, error) {
 	network, address, err := ParseURI(uri)
 	if err != nil {
 		return nil, err
+	}
+
+	if network == "unix" || network == "unixpacket" {
+		if err := os.Remove(address); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("remove stale socket (%s): %w", address, err)
+		}
 	}
 
 	listener, err := config.Listen(ctx, network, address)

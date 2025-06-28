@@ -54,6 +54,8 @@ func TestParseURI(t *testing.T) {
 		{uri: ":", network: "tcp", address: ":"},
 		{uri: "", err: true},
 		{uri: "localhost:8080/a", network: "tcp", address: "localhost:8080"},
+		{uri: "://", err: true},
+		{uri: "tcp://", err: true},
 	} {
 		t.Run(testcase.uri, func(t *testing.T) {
 			network, address, err := unixtransport.ParseURI(testcase.uri)
