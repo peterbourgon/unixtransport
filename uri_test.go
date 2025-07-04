@@ -200,9 +200,12 @@ func TestListenURIRemoveFailures(t *testing.T) {
 		if err := os.Mkdir(d, 0o755); err != nil {
 			t.Fatalf("os.Mkdir: %v", err)
 		}
+		if err := os.WriteFile(filepath.Join(d, "xxx"), []byte(`abc`), 0o644); err != nil {
+			t.Fatalf("os.WriteFile: %v", err)
+		}
 		uri := "unix://" + d
 		if _, err := unixtransport.ListenURI(ctx, uri); err == nil {
-			t.Fatalf("ListenURI(%s): expected error, got none", uri)
+			t.Errorf("ListenURI(%s): expected error, got none", uri)
 		}
 	})
 
