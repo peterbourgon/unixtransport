@@ -57,6 +57,8 @@ func TestParseURI(t *testing.T) {
 		{uri: "localhost:8080/a", network: "tcp", address: "localhost:8080"},
 		{uri: "://", err: true},
 		{uri: "tcp://", err: true},
+		{uri: "[::]:8080", network: "tcp", address: "[::]:8080"},
+		{uri: "tcp://[::]:8080", network: "tcp", address: "[::]:8080"},
 	} {
 		t.Run(testcase.uri, func(t *testing.T) {
 			network, address, err := unixtransport.ParseURI(testcase.uri)
@@ -215,4 +217,37 @@ func TestListenURIRemoveFailures(t *testing.T) {
 			t.Fatalf("ListenURI(%s): expected error, got none", uri)
 		}
 	})
+}
+
+func TestListenURI_IPv6(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	for _, uri := range []string{"[::1]:0", "tcp://[::1]:0"} {
+		t.Run(uri, func(t *testing.T) {
+			ln, err := unixtransport.ListenURI(ctx, uri)
+			if err != nil {
+				t.Fatalf("ListenURI(%q) failed: %v", uri, err)
+			}
+			t.Cleanup(func() { ln.Close() })
+
+			host, port, err := net.SplitHostPort(ln.Addr().String())
+			if err != nil {
+				t.Fatalf("SplitHostPort(%q) failed: %v", ln.Addr().String(), err)
+			}
+			if host != "::1" {
+				t.Errorf("expected host '::1', got %q", host)
+			}
+			if port == "0" {
+				t.Errorf("expected non-zero port, got %q", port)
+			}
+
+			addr4 := net.JoinHostPort("127.0.0.1", port)
+			if c, err := net.Dial("tcp", addr4); err == nil {
+				c.Close()
+				t.Errorf("net.Dial(tcp, %q): want error, have success", addr4)
+			}
+		})
+	}
 }
