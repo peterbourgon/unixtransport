@@ -49,7 +49,10 @@ You can change it like this:
 Which lets you specify addrs like this:
 
 ```shell
-myserver -addr=unix:///tmp/mysocket
+myserver -addr=:8080                # equivalent to `tcp://:8080`
+myserver -addr=tcp://:8080          # listen on all interfaces, TCP port 8080
+myserver -addr=udp://0.0.0.0:12345  # listen on all IPv4 interfaces, UDP port 12345
+myserver -addr=unix:///tmp/mysocket # listen on Unix socket path /tmp/mysocket
 ```
 
 See e.g. [ParseURI][parseuri] and [ListenURI][listenuri] for more info.
