@@ -28,7 +28,7 @@ See e.g. [Register][register] and [RegisterDefault][registerdef] for more info.
 If you have this:
 
 ```go
-fs := flag.NewFlagSet("myserver")
+fs := flag.NewFlagSet("myserver", flag.ContinueOnError)
 addr := fs.String("addr", ":8080", "listen address")
 ...
 http.ListenAndServe(*addr, nil)
@@ -37,7 +37,7 @@ http.ListenAndServe(*addr, nil)
 You can change it like this:
 
 ```diff
- fs := flag.NewFlagSet("myserver")
+ fs := flag.NewFlagSet("myserver", flag.ContinueOnError)
  addr := fs.String("addr", ":8080", "listen address")
  ...
 -http.ListenAndServe(*addr, nil)
@@ -52,7 +52,7 @@ Which lets you specify addrs like this:
 myserver -addr=unix:///tmp/mysocket
 ```
 
-See e.g. [ParseURI][parseuri] and [ListenURI][listenuri] for more info.
+See [ParseURI][parseuri] and [ListenURI][listenuri] for more info.
 
 
 ## Acknowledgements
