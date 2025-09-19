@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"syscall"
@@ -54,6 +55,10 @@ func TestParseURI(t *testing.T) {
 		{uri: ":", network: "tcp", address: ":"},
 		{uri: "", err: true},
 		{uri: "localhost:8080/a", network: "tcp", address: "localhost:8080"},
+		{uri: "://", err: true},
+		{uri: "tcp://", err: true},
+		{uri: "[::]:8080", network: "tcp", address: "[::]:8080"},
+		{uri: "tcp://[::]:8080", network: "tcp", address: "[::]:8080"},
 	} {
 		t.Run(testcase.uri, func(t *testing.T) {
 			network, address, err := unixtransport.ParseURI(testcase.uri)
@@ -148,5 +153,101 @@ func TestListenURIConfig(t *testing.T) {
 
 	if want, have := []networkAddress{{"unix", socket}}, seen; !reflect.DeepEqual(want, have) {
 		t.Errorf("seen: want %+v, have %+v", want, have)
+	}
+}
+
+func TestListenURIRemoveFailures(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	t.Run("invalid URI", func(t *testing.T) {
+		uri := "unix:///"
+		if _, err := unixtransport.ListenURI(ctx, uri); err == nil {
+			t.Fatalf("ListenURI(%s): expected error, got none", uri)
+		}
+	})
+
+	t.Run("bad permission", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "dir")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatalf("os.Mkdir: %v", err)
+		}
+
+		sock := filepath.Join(dir, "sock")
+		if err := os.WriteFile(sock, []byte{}, 0o644); err != nil {
+			t.Fatalf("os.WriteFile: %v", err)
+		}
+
+		// The only way to trigger an error on the os.Remove of the socket file
+		// in a unit test like this one, is to remove the write permission on
+		// the parent directory.
+		if err := os.Chmod(dir, 0o555); err != nil {
+			t.Fatalf("os.Chmod(%s, 0555): %v", dir, err)
+		}
+		defer func() { // allow test cleanup to remove the TempDir
+			if err := os.Chmod(dir, 0o755); err != nil {
+				t.Errorf("os.Chmod(%s, 0755): %v", dir, err)
+			}
+		}()
+
+		uri := "unix://" + sock
+		if _, err := unixtransport.ListenURI(ctx, uri); err == nil {
+			t.Fatalf("ListenURI(%s): expected error, got none", uri)
+		}
+	})
+
+	t.Run("socket is directory", func(t *testing.T) {
+		d := filepath.Join(t.TempDir(), "dir-as-sock")
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatalf("os.Mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "xxx"), []byte(`abc`), 0o644); err != nil {
+			t.Fatalf("os.WriteFile: %v", err)
+		}
+		uri := "unix://" + d
+		if _, err := unixtransport.ListenURI(ctx, uri); err == nil {
+			t.Errorf("ListenURI(%s): expected error, got none", uri)
+		}
+	})
+
+	t.Run("listen error", func(t *testing.T) {
+		uri := "doesnotexist://foo"
+		if _, err := unixtransport.ListenURI(ctx, uri); err == nil {
+			t.Fatalf("ListenURI(%s): expected error, got none", uri)
+		}
+	})
+}
+
+func TestListenURI_IPv6(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	for _, uri := range []string{"[::1]:0", "tcp://[::1]:0"} {
+		t.Run(uri, func(t *testing.T) {
+			ln, err := unixtransport.ListenURI(ctx, uri)
+			if err != nil {
+				t.Fatalf("ListenURI(%q) failed: %v", uri, err)
+			}
+			t.Cleanup(func() { ln.Close() })
+
+			host, port, err := net.SplitHostPort(ln.Addr().String())
+			if err != nil {
+				t.Fatalf("SplitHostPort(%q) failed: %v", ln.Addr().String(), err)
+			}
+			if host != "::1" {
+				t.Errorf("expected host '::1', got %q", host)
+			}
+			if port == "0" {
+				t.Errorf("expected non-zero port, got %q", port)
+			}
+
+			addr4 := net.JoinHostPort("127.0.0.1", port)
+			if c, err := net.Dial("tcp", addr4); err == nil {
+				c.Close()
+				t.Errorf("net.Dial(tcp, %q): want error, have success", addr4)
+			}
+		})
 	}
 }
