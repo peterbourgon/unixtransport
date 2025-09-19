@@ -41,7 +41,7 @@ You can change it like this:
  addr := fs.String("addr", ":8080", "listen address")
  ...
 -http.ListenAndServe(*addr, nil)
-+ln, err := ListenURI(context.TODO(), *addr)
++ln, err := unixtransport.ListenURI(context.TODO(), *addr)
 +// handle err
 +http.Serve(ln, nil)
 ```
